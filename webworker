@@ -1,0 +1,41 @@
+const version = '1.3';
+
+async function onAttach(debuggeeId) {
+  /** Enable receiving 'Target.attachedToTarget' events */
+  await chrome.debugger.sendCommand(debuggeeId, 'Target.setAutoAttach', {
+    autoAttach: true,
+    waitForDebuggerOnStart: true,
+    flatten: true,
+  }); //
+  /** Enable Network events for the current tab */
+  chrome.debugger.sendCommand(debuggeeId, 'Network.enable');
+}
+
+function allEventHandler(debuggeeId, message, params) {
+  /** When workers are created, 'Target.attachedToTarget' events are fired */
+  if (message === 'Target.attachedToTarget') {
+    /** Attach debugger to workers */
+    chrome.debugger.attach(
+      { targetId: params.targetInfo.targetId },
+      version,
+      () => {
+        /** Enable Network for workers to receive WebSocket events */
+        chrome.debugger.sendCommand(
+          { targetId: params.targetInfo.targetId },
+          'Network.enable'
+        );
+      }
+    );
+  } else {
+    console.log(message, params);
+  }
+}
+
+chrome.debugger.onEvent.addListener(allEventHandler);
+
+/** Click extension icon to attach debugger to the current tab */
+chrome.action.onClicked.addListener(function (tab) {
+  const tabId = tab.id;
+  const debuggeeId = { tabId };
+  chrome.debugger.attach(debuggeeId, version, onAttach.bind(null, debuggeeId));
+});
